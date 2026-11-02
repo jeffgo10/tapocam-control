@@ -115,10 +115,19 @@ describe("cast wall", () => {
 
   it("places one frame or two, three, and four tiles", () => {
     assert.match(mosaicFilter(1), /1280:720/);
-    assert.match(mosaicFilter(2), /hstack=inputs=2\[v\]$/);
+    assert.match(mosaicFilter(2), /hstack=inputs=2\[mosaic\]/);
     assert.match(mosaicFilter(3), /pad=1280:360:0:0:black\[bot\]/);
     assert.match(mosaicFilter(4), /layout=0_0\|640_0\|0_360\|640_360/);
     assert.throws(() => mosaicFilter(5), /1 to 4/);
+  });
+
+  it("insets the picture so a display does not crop the corner label", () => {
+    for (const count of [1, 2, 3, 4]) {
+      const filter = mosaicFilter(count);
+      assert.match(filter, /scale=1216:684/);
+      assert.match(filter, /pad=1280:720:\(ow-iw\)\/2:\(oh-ih\)\/2:black/);
+      assert.match(filter, /\[v\]$/);
+    }
   });
 
   it("encodes two-second segments on the camera clock", () => {

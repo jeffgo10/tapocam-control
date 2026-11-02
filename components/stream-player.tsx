@@ -9,7 +9,7 @@ type StreamPlayerProps = {
   selected?: boolean;
   onSelect?: () => void;
   onRetry?: () => void;
-  suspended?: boolean;
+  castDevice?: string | null;
 };
 
 export function playbackUrl(streamUrl: string): string {
@@ -30,8 +30,9 @@ export function StreamPlayer({
   selected = false,
   onSelect,
   onRetry,
-  suspended = false,
+  castDevice = null,
 }: StreamPlayerProps) {
+  const suspended = castDevice !== null;
   const frameSrc = src && !suspended ? playbackUrl(src) : null;
 
   return (
@@ -70,7 +71,7 @@ export function StreamPlayer({
           />
         ) : (
           <div className="absolute inset-0 grid place-items-center gap-3 px-6 text-center text-sm text-muted">
-            <p>{suspended ? "Playing on the Nest display" : error || emptyLabel}</p>
+            <p>{suspended ? `Playing in ${castDevice}` : error || emptyLabel}</p>
             {error && onRetry && !suspended ? (
               <button
                 type="button"
