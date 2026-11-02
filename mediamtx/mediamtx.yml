@@ -1,0 +1,46 @@
+# Local bridge for a Tapo C200. The Next.js app adds the camera path at runtime.
+
+logLevel: info
+
+api: true
+apiAddress: :9997
+
+# RTSP stays inside the Docker network so the cast wall can read and publish.
+# It is not published on the host.
+rtsp: true
+rtmp: false
+# Nest displays play HLS. MPEG-TS is the variant Google Cast accepts.
+# The encoder places a keyframe every 2s. A 1s minimum cuts on that keyframe,
+# and the playlist keeps 8 of those short pieces. The Nest display stalls on a
+# playlist that is still growing, so cast starts once this window is full.
+hls: true
+hlsVariant: mpegts
+hlsSegmentDuration: 1s
+hlsSegmentCount: 8
+srt: false
+
+webrtc: true
+webrtcAddress: :8889
+webrtcAllowOrigins: ["*"]
+webrtcLocalUDPAddress: :8189
+# TCP as well as UDP. Docker on macOS often drops the UDP path.
+webrtcLocalTCPAddress: :8189
+# Addresses inside the container are not reachable from a browser.
+# Advertise the host instead. docker-compose overrides this from WEBRTC_ADDITIONAL_HOSTS.
+webrtcIPsFromInterfaces: false
+webrtcAdditionalHosts: ["127.0.0.1"]
+
+# Published port 9997 is reached through Docker's bridge, so the request
+# source is not 127.0.0.1 inside the container. The host binding stays local.
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+      - action: read
+      - action: playback
+      - action: api
+
+paths: {}

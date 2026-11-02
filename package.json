@@ -1,0 +1,30 @@
+{
+  "name": "tapocam-control",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local WebRTC and PTZ controller for the TP-Link Tapo C200.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test lib/*.test.ts"
+  },
+  "dependencies": {
+    "mysql2": "^3.24.6",
+    "next": "16.4.3",
+    "node-onvif": "^0.1.7",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.3",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

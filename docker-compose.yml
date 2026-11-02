@@ -1,0 +1,44 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: tapocam-mysql
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3306:3306"
+    networks:
+      - tapocam
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-tapocam}
+      MYSQL_USER: ${MYSQL_USER:-tapocam}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tapocam}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-tapocam-root}
+    volumes:
+      - tapocam-mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.3
+    container_name: tapocam-mediamtx
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9997:9997"
+      - "8888:8888"
+      - "8889:8889"
+      - "8189:8189"
+      - "8189:8189/udp"
+    environment:
+      MTX_WEBRTCADDITIONALHOSTS: ${WEBRTC_ADDITIONAL_HOSTS:-127.0.0.1}
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+
+networks:
+  tapocam:
+    name: tapocam
+
+volumes:
+  tapocam-mysql:
