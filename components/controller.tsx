@@ -42,7 +42,8 @@ export function Controller() {
   const [moving, setMoving] = useState(false);
   const [busyToken, setBusyToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [castLive, setCastLive] = useState(false);
+  const [castDevice, setCastDevice] = useState<string | null>(null);
+  const castLive = castDevice !== null;
   const movingRef = useRef(false);
 
   const cameraIds = cameras.map((camera) => camera.id);
@@ -312,7 +313,7 @@ export function Controller() {
           <h1 className="text-2xl font-semibold tracking-tight">Tapo cameras</h1>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <CastControl cameraIds={visibleIds} onLiveChange={setCastLive} />
+          <CastControl cameraIds={visibleIds} onLiveChange={setCastDevice} />
           <div className="inline-flex rounded-xl border border-line p-1">
             <ModeButton current={prefs.mode} mode="single" onSelect={setMode}>
               Single
@@ -378,7 +379,7 @@ export function Controller() {
           streams={streams}
           onSelect={controlCamera}
           onRetry={retryStream}
-          suspended={castLive}
+          castDevice={castDevice}
         />
       </div>
     </div>

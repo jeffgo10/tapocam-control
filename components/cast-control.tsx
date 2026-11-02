@@ -23,7 +23,7 @@ type CastResponse = {
 
 type CastControlProps = {
   cameraIds: string[];
-  onLiveChange: (live: boolean) => void;
+  onLiveChange: (deviceName: string | null) => void;
 };
 
 export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
@@ -91,8 +91,8 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
   }
 
   useEffect(() => {
-    onLiveChange(live);
-  }, [live, onLiveChange]);
+    onLiveChange(live ? deviceName : null);
+  }, [deviceName, live, onLiveChange]);
 
   useEffect(() => {
     const onLeave = () => {

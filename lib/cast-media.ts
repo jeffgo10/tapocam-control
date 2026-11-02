@@ -18,8 +18,12 @@ const RTSP_BASE = /^rtsp:\/\/[a-zA-Z0-9.-]+:\d{2,5}$/;
 
 const TILE =
   "scale=640:360:flags=fast_bilinear:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS-STARTPTS,fps=15";
+// Cast receivers crop the outer edge of the frame. A 2.5% margin keeps the
+// camera's burned-in time and name inside the picture.
+const OVERSCAN =
+  "scale=1216:684:flags=fast_bilinear,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,setsar=1";
 const FRAME =
-  "scale=1280:720:flags=fast_bilinear:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS-STARTPTS,fps=15";
+  "scale=1216:684:flags=fast_bilinear:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,setsar=1,setpts=PTS-STARTPTS,fps=15";
 const SILENT_AUDIO = "anullsrc=channel_layout=stereo:sample_rate=48000,asetpts=PTS-STARTPTS[a]";
 
 export const CAST_PATH = "cast-display";
@@ -167,29 +171,30 @@ export function hlsPlaylistUrl(host: string, pathName: string, port = "8888"): s
 export function mosaicFilter(count: number): string {
   if (count === 1) return `[0:v]${FRAME}[v]`;
   const tiles = Array.from({ length: count }, (_, index) => `[${index}:v]${TILE}[t${index}]`);
+  let layout: string;
   if (count === 2) {
-    return [
+    layout = [
       ...tiles,
       "[t0]pad=640:720:0:180:black[a]",
       "[t1]pad=640:720:0:180:black[b]",
-      "[a][b]hstack=inputs=2[v]",
+      "[a][b]hstack=inputs=2[mosaic]",
     ].join(";");
-  }
-  if (count === 3) {
-    return [
+  } else if (count === 3) {
+    layout = [
       ...tiles,
       "[t0][t1]hstack=inputs=2[top]",
       "[t2]pad=1280:360:0:0:black[bot]",
-      "[top][bot]vstack=inputs=2[v]",
+      "[top][bot]vstack=inputs=2[mosaic]",
     ].join(";");
-  }
-  if (count === 4) {
-    return [
+  } else if (count === 4) {
+    layout = [
       ...tiles,
-      "[t0][t1][t2][t3]xstack=inputs=4:layout=0_0|640_0|0_360|640_360:fill=black[v]",
+      "[t0][t1][t2][t3]xstack=inputs=4:layout=0_0|640_0|0_360|640_360:fill=black[mosaic]",
     ].join(";");
+  } else {
+    throw new Error("A cast needs 1 to 4 cameras.");
   }
-  throw new Error("A cast needs 1 to 4 cameras.");
+  return `${layout};[mosaic]${OVERSCAN}[v]`;
 }
 
 export function mosaicFfmpegArgs(paths: string[], rtspBase: string): string[] {

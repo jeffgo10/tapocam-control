@@ -17,7 +17,7 @@ type CameraStageProps = {
   streams: Record<string, StreamState | undefined>;
   onSelect: (id: string) => void;
   onRetry: (id: string) => void;
-  suspended?: boolean;
+  castDevice?: string | null;
 };
 
 export function CameraStage({
@@ -28,7 +28,7 @@ export function CameraStage({
   streams,
   onSelect,
   onRetry,
-  suspended = false,
+  castDevice = null,
 }: CameraStageProps) {
   const visible = visibleIds.flatMap((id) => {
     const camera = cameras.find((item) => item.id === id);
@@ -62,7 +62,7 @@ export function CameraStage({
             selected={mode === "wall" && camera.id === activeId}
             onSelect={mode === "wall" ? () => onSelect(camera.id) : undefined}
             onRetry={() => onRetry(camera.id)}
-            suspended={suspended}
+            castDevice={castDevice}
           />
         );
       })}
