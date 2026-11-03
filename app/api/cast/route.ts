@@ -1,6 +1,7 @@
 import { withDatabase, requireCamera } from "@/lib/camera-http";
+import { findCastModel } from "@/lib/cast-discovery";
 import { prepareCast, stopCastMosaic } from "@/lib/cast-mosaic";
-import { parseCastRequest } from "@/lib/cast-media";
+import { chooseCastOverscan, parseCastRequest } from "@/lib/cast-media";
 import type { CameraRecord } from "@/lib/cameras";
 import { errorMessage, jsonError, readJson } from "@/lib/http";
 import { redactSecrets } from "@/lib/rtsp";
@@ -18,8 +19,14 @@ export async function POST(request: Request) {
     }
 
     try {
-      const stream = await prepareCast(cameras, parsed.value.beat);
-      return Response.json({ success: true, ...stream });
+      const overscan = parsed.value.beat
+        ? parsed.value.overscan
+        : chooseCastOverscan(await findCastModel(parsed.value.deviceName), parsed.value.hdmi);
+      const stream = await prepareCast(cameras, {
+        beat: parsed.value.beat,
+        overscan,
+      });
+      return Response.json({ success: true, ...stream, overscan });
     } catch (error) {
       const secrets = cameras.flatMap((camera) => [
         camera.password,

@@ -4,6 +4,9 @@ import {
   CAST_CONTAINER,
   CAST_PATH,
   FFMPEG_IMAGE,
+  castLaunchAction,
+  castModelNeedsOverscan,
+  castMosaicKey,
   castStartAt,
   castTitle,
   hlsPlaylistReady,
@@ -25,8 +28,29 @@ describe("cast request", () => {
   it("keeps wall order and drops duplicates", () => {
     assert.deepEqual(parseCastRequest({ cameraIds: [CAMERA_B, CAMERA_A, CAMERA_B], beat: true }), {
       ok: true,
-      value: { cameraIds: [CAMERA_B, CAMERA_A], beat: true },
+      value: {
+        cameraIds: [CAMERA_B, CAMERA_A],
+        beat: true,
+        overscan: false,
+        deviceName: "",
+        hdmi: false,
+      },
     });
+    assert.deepEqual(
+      parseCastRequest({ cameraIds: [CAMERA_A], deviceName: " Office display ", hdmi: true }),
+      {
+        ok: true,
+        value: {
+          cameraIds: [CAMERA_A],
+          beat: false,
+          overscan: false,
+          deviceName: "Office display",
+          hdmi: true,
+        },
+      },
+    );
+    assert.equal(parseCastRequest({ cameraIds: [CAMERA_A], overscan: "yes" }).ok, false);
+    assert.equal(parseCastRequest({ cameraIds: [CAMERA_A], deviceName: "bad\nname" }).ok, false);
   });
 
   it("rejects an empty selection and more than four cameras", () => {
@@ -121,13 +145,30 @@ describe("cast wall", () => {
     assert.throws(() => mosaicFilter(5), /1 to 4/);
   });
 
-  it("insets the picture so a display does not crop the corner label", () => {
+  it("insets a Chromecast picture and leaves other receivers full frame", () => {
+    assert.equal(castModelNeedsOverscan("Chromecast"), true);
+    assert.equal(castModelNeedsOverscan("Google Nest Hub"), false);
     for (const count of [1, 2, 3, 4]) {
-      const filter = mosaicFilter(count);
-      assert.match(filter, /scale=1216:684/);
-      assert.match(filter, /pad=1280:720:\(ow-iw\)\/2:\(oh-ih\)\/2:black/);
-      assert.match(filter, /\[v\]$/);
+      const inset = mosaicFilter(count, true);
+      assert.match(inset, /scale=1216:684/);
+      assert.match(inset, /pad=1280:720:\(ow-iw\)\/2:\(oh-ih\)\/2:black/);
+      assert.match(inset, /\[v\]$/);
+      const full = mosaicFilter(count, false);
+      assert.doesNotMatch(full, /scale=1216:684/);
+      assert.match(full, /\[v\]$/);
     }
+    assert.match(mosaicFilter(1, false), /scale=1280:720/);
+    assert.equal(castMosaicKey([PATH_A], true), `overscan:${PATH_A}`);
+    assert.equal(castMosaicKey([PATH_A], false), `full:${PATH_A}`);
+    assert.equal(castLaunchAction("full:cam", true, "full:cam", true), "refresh");
+    assert.equal(castLaunchAction("overscan:cam", true, "full:cam", true), "ignore");
+    assert.equal(castLaunchAction(null, false, "full:cam", true), "ignore");
+    assert.equal(castLaunchAction("full:cam", false, "full:cam", true), "start");
+    assert.equal(castLaunchAction("full:cam", true, "overscan:cam", false), "start");
+    const chromecast = mosaicFfmpegArgs([PATH_A], "rtsp://mediamtx:8554", true);
+    assert.ok(chromecast.some((arg) => arg.includes("scale=1216:684")));
+    const nest = mosaicFfmpegArgs([PATH_A], "rtsp://mediamtx:8554", false);
+    assert.equal(nest.some((arg) => arg.includes("scale=1216:684")), false);
   });
 
   it("encodes two-second segments on the camera clock", () => {
