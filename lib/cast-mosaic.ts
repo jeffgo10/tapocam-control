@@ -5,6 +5,8 @@ import {
   CAST_CONTAINER,
   CAST_PATH,
   FFMPEG_IMAGE,
+  castLaunchAction,
+  castMosaicKey,
   castStartAt,
   castTitle,
   hlsBufferedSeconds,
@@ -107,12 +109,15 @@ function dockerNetwork(): string {
   return process.env.CAST_DOCKER_NETWORK?.trim() || "container:tapocam-mediamtx";
 }
 
-export async function prepareCast(cameras: CameraRecord[], beat: boolean): Promise<CastStream> {
+export async function prepareCast(
+  cameras: CameraRecord[],
+  options: { beat: boolean; overscan: boolean },
+): Promise<CastStream> {
   const host = castHost();
   const title = castTitle(cameras.map((camera) => camera.name));
   const port = hlsPort();
   const wall = cameras.length > 1;
-  if (!beat) {
+  if (!options.beat) {
     for (const camera of cameras) {
       const pathName = wall ? castSourcePathFor(camera.id) : streamPathFor(camera.id);
       await ensureRtspSource(buildRtspUrl(camera, wall ? "stream2" : "stream1"), pathName);
@@ -122,7 +127,7 @@ export async function prepareCast(cameras: CameraRecord[], beat: boolean): Promi
   const paths = cameras.map((camera) =>
     wall ? castSourcePathFor(camera.id) : streamPathFor(camera.id),
   );
-  const { restarted, buffered } = await startCastMosaic(paths);
+  const { restarted, buffered } = await startCastMosaic(paths, options.overscan, options.beat);
   return {
     hlsUrl: hlsPlaylistUrl(host, CAST_PATH, port),
     contentType: "application/x-mpegurl",
@@ -134,9 +139,15 @@ export async function prepareCast(cameras: CameraRecord[], beat: boolean): Promi
 
 export async function startCastMosaic(
   paths: string[],
+  overscan = false,
+  beat = false,
 ): Promise<{ restarted: boolean; buffered: number }> {
-  const key = paths.join(",");
-  const restarted = await exclusive(() => launchUnlocked(paths));
+  const key = castMosaicKey(paths, overscan);
+  const restarted = await exclusive(() => launchUnlocked(paths, overscan, beat));
+  if (!restarted) {
+    const current = store();
+    if (current.key !== key) return { restarted: false, buffered: 0 };
+  }
   try {
     const buffered = await waitForPlaylist(CAST_PATH, READY_TIMEOUT_MS, key);
     return { restarted, buffered };
@@ -155,20 +166,23 @@ export function stopCastMosaic(force = true): Promise<void> {
   });
 }
 
-async function launchUnlocked(paths: string[]): Promise<boolean> {
-  const key = paths.join(",");
+async function launchUnlocked(paths: string[], overscan: boolean, beat: boolean): Promise<boolean> {
+  const key = castMosaicKey(paths, overscan);
   const current = store();
-  if (key === current.key && current.child && current.child.exitCode === null) {
+  const childAlive = current.child !== null && current.child.exitCode === null;
+  const action = castLaunchAction(current.key, childAlive, key, beat);
+  if (action === "refresh") {
     current.lastBeat = Date.now();
     return false;
   }
+  if (action === "ignore") return false;
 
   await stopUnlocked();
   store().sources = paths.filter((path) => path.startsWith("sub-"));
   await ensurePublisherPath(CAST_PATH);
   armSweeper();
 
-  const args = mosaicDockerArgs(mosaicFfmpegArgs(paths, rtspBase()), {
+  const args = mosaicDockerArgs(mosaicFfmpegArgs(paths, rtspBase(), overscan), {
     image: process.env.CAST_FFMPEG_IMAGE?.trim() || FFMPEG_IMAGE,
     network: dockerNetwork(),
     container: CAST_CONTAINER,

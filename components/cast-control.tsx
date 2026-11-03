@@ -6,6 +6,7 @@ import {
   castContext,
   castDeviceName,
   castFailure,
+  castHdmiActive,
   castSessionPhase,
   endCastSession,
   loadCastMedia,
@@ -19,6 +20,7 @@ type CastResponse = {
   title: string;
   restarted: boolean;
   startAt: number;
+  overscan?: boolean;
 };
 
 type CastControlProps = {
@@ -41,6 +43,7 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
   const sessionRound = useRef(0);
   const endingSession = useRef(false);
   const forcedStop = useRef(false);
+  const overscanChoice = useRef(false);
 
   const live = !dismissed && status === "live" && deviceName !== null;
   const connecting = !dismissed && status === "starting";
@@ -172,7 +175,7 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
       return;
     }
     if (!cameraKey) return;
-    const requestId = `${cameraKey}@${attempt}`;
+    const requestId = `${cameraKey}@${attempt}@${deviceName}`;
     if (publishedKey.current === requestId) return;
 
     const token = ++generation.current;
@@ -184,10 +187,15 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
       try {
         const prepared = await requestJson<CastResponse>("/api/cast", {
           method: "POST",
-          body: JSON.stringify({ cameraIds: cameraKey.split("|") }),
+          body: JSON.stringify({
+            cameraIds: cameraKey.split("|"),
+            deviceName,
+            hdmi: castHdmiActive(),
+          }),
           signal: controller.signal,
         });
         if (generation.current !== token || dismissedRef.current) return;
+        overscanChoice.current = prepared.overscan === true;
         await loadCastMedia(prepared.hlsUrl, prepared.title, prepared.startAt);
         if (generation.current !== token || dismissedRef.current) return;
         publishedKey.current = requestId;
@@ -206,20 +214,30 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
 
   useEffect(() => {
     if (dismissed || !deviceName || status !== "live" || !cameraKey) return;
+    const controller = new AbortController();
     const timer = window.setInterval(() => {
       void requestJson<CastResponse>("/api/cast", {
         method: "POST",
-        body: JSON.stringify({ cameraIds: cameraKey.split("|"), beat: true }),
+        body: JSON.stringify({
+          cameraIds: cameraKey.split("|"),
+          beat: true,
+          overscan: overscanChoice.current,
+        }),
+        signal: controller.signal,
       })
         .then((prepared) => {
-          if (!prepared.restarted) return;
+          if (controller.signal.aborted || !prepared.restarted) return;
           return loadCastMedia(prepared.hlsUrl, prepared.title, prepared.startAt);
         })
         .catch((error: unknown) => {
+          if (controller.signal.aborted) return;
           setMessage(error instanceof Error ? error.message : "The Nest display lost the stream.");
         });
     }, 15_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
   }, [cameraKey, deviceName, dismissed, status]);
 
   function releaseCast() {
