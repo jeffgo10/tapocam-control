@@ -18,12 +18,15 @@ const RTSP_BASE = /^rtsp:\/\/[a-zA-Z0-9.-]+:\d{2,5}$/;
 
 const TILE =
   "scale=640:360:flags=fast_bilinear:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS-STARTPTS,fps=15";
-// Cast receivers crop the outer edge of the frame. A 2.5% margin keeps the
-// camera's burned-in time and name inside the picture.
+// A Chromecast, Google TV, or smart TV crops the outer edge of the frame. A
+// 2.5% margin keeps the camera's burned-in time and name inside the picture.
+// A Nest Hub and other smart displays show the full frame.
 const OVERSCAN =
   "scale=1216:684:flags=fast_bilinear,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,setsar=1";
 const FRAME =
   "scale=1216:684:flags=fast_bilinear:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,setsar=1,setpts=PTS-STARTPTS,fps=15";
+const FULL_FRAME =
+  "scale=1280:720:flags=fast_bilinear:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,setsar=1,setpts=PTS-STARTPTS,fps=15";
 const SILENT_AUDIO = "anullsrc=channel_layout=stereo:sample_rate=48000,asetpts=PTS-STARTPTS[a]";
 
 export const CAST_PATH = "cast-display";
@@ -48,6 +51,9 @@ export type CastEnv = {
 export type CastRequest = {
   cameraIds: string[];
   beat: boolean;
+  overscan: boolean;
+  deviceName: string;
+  hdmi: boolean;
 };
 
 export type CastStream = {
@@ -83,7 +89,49 @@ export function parseCastRequest(body: unknown): ParseResult<CastRequest> {
   if (ids.length > 4) {
     return { ok: false, error: "A cast wall can show up to 4 cameras." };
   }
-  return { ok: true, value: { cameraIds: ids, beat: body.beat === true } };
+  if (body.overscan !== undefined && typeof body.overscan !== "boolean") {
+    return { ok: false, error: "overscan must be true or false." };
+  }
+  if (body.hdmi !== undefined && typeof body.hdmi !== "boolean") {
+    return { ok: false, error: "hdmi must be true or false." };
+  }
+  const deviceName = parseCastDeviceName(body.deviceName);
+  if (!deviceName.ok) return deviceName;
+  return {
+    ok: true,
+    value: {
+      cameraIds: ids,
+      beat: body.beat === true,
+      overscan: body.overscan === true,
+      deviceName: deviceName.value,
+      hdmi: body.hdmi === true,
+    },
+  };
+}
+
+function parseCastDeviceName(value: unknown): ParseResult<string> {
+  if (value === undefined || value === null) return { ok: true, value: "" };
+  if (typeof value !== "string") return { ok: false, error: "Cast device name is invalid." };
+  const name = value.trim();
+  if (name.length > 100 || /[\u0000-\u001f]/.test(name)) {
+    return { ok: false, error: "Cast device name is invalid." };
+  }
+  return { ok: true, value: name };
+}
+
+// Model names come from the device's own Cast advertisement, not the name
+// chosen in the Google Home app. A television-style receiver crops the edges.
+// A Nest Hub and other smart displays do not.
+export function castModelNeedsOverscan(modelName: string): boolean {
+  const model = modelName.trim().toLowerCase();
+  if (!model) return false;
+  if (/\b(?:audio|group|speaker|mini|nest|hub|home|display)\b/.test(model)) return false;
+  return /\b(?:chromecast|smart tv|google tv|android tv)\b/.test(model);
+}
+
+export function chooseCastOverscan(modelName: string | null, hdmi: boolean): boolean {
+  if (modelName) return castModelNeedsOverscan(modelName);
+  return hdmi;
 }
 
 export function hlsBufferedSeconds(body: string): number {
@@ -168,8 +216,25 @@ export function hlsPlaylistUrl(host: string, pathName: string, port = "8888"): s
   return `http://${host}:${port}/${pathName}/index.m3u8`;
 }
 
-export function mosaicFilter(count: number): string {
-  if (count === 1) return `[0:v]${FRAME}[v]`;
+export function castMosaicKey(paths: string[], overscan: boolean): string {
+  return `${overscan ? "overscan" : "full"}:${paths.join(",")}`;
+}
+
+// A heartbeat from the receiver we just left must not replace the encode that
+// the newly chosen device already started.
+export function castLaunchAction(
+  currentKey: string | null,
+  childAlive: boolean,
+  nextKey: string,
+  beat: boolean,
+): "refresh" | "ignore" | "start" {
+  if (nextKey === currentKey && childAlive) return "refresh";
+  if (beat && currentKey !== nextKey) return "ignore";
+  return "start";
+}
+
+export function mosaicFilter(count: number, overscan = false): string {
+  if (count === 1) return `[0:v]${overscan ? FRAME : FULL_FRAME}[v]`;
   const tiles = Array.from({ length: count }, (_, index) => `[${index}:v]${TILE}[t${index}]`);
   let layout: string;
   if (count === 2) {
@@ -194,10 +259,10 @@ export function mosaicFilter(count: number): string {
   } else {
     throw new Error("A cast needs 1 to 4 cameras.");
   }
-  return `${layout};[mosaic]${OVERSCAN}[v]`;
+  return overscan ? `${layout};[mosaic]${OVERSCAN}[v]` : `${layout};[mosaic]setsar=1[v]`;
 }
 
-export function mosaicFfmpegArgs(paths: string[], rtspBase: string): string[] {
+export function mosaicFfmpegArgs(paths: string[], rtspBase: string, overscan = false): string[] {
   if (!RTSP_BASE.test(rtspBase)) throw new Error("Cast RTSP address is invalid.");
   if (paths.length < 1 || paths.length > 4) {
     throw new Error("A cast needs 1 to 4 cameras.");
@@ -220,7 +285,7 @@ export function mosaicFfmpegArgs(paths: string[], rtspBase: string): string[] {
   }
   args.push(
     "-filter_complex",
-    `${mosaicFilter(paths.length)};${SILENT_AUDIO}`,
+    `${mosaicFilter(paths.length, overscan)};${SILENT_AUDIO}`,
     "-map",
     "[v]",
     "-map",

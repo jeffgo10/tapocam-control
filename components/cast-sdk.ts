@@ -2,6 +2,7 @@ type CastDevice = { friendlyName: string };
 
 type CastSession = {
   getCastDevice(): CastDevice;
+  getActiveInputState?(): number;
   loadMedia(request: object): Promise<unknown>;
   endSession(stopCasting: boolean): void;
 };
@@ -115,6 +116,13 @@ export function castSessionPhase(state: string): "starting" | "connected" | "clo
 
 export function castDeviceName(): string | null {
   return castContext().getCurrentSession()?.getCastDevice().friendlyName ?? null;
+}
+
+// YES and NO mean the receiver is an HDMI source. UNKNOWN is a Nest Hub,
+// or a television that did not report the HDMI input.
+export function castHdmiActive(): boolean {
+  const state = castContext().getCurrentSession()?.getActiveInputState?.();
+  return state === 0 || state === 1;
 }
 
 export async function requestCastSession(): Promise<void> {
