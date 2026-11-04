@@ -35,7 +35,7 @@ docker compose up -d --force-recreate
 
 ## Volume
 
-Docker Compose bind-mounts `./recordings` on this computer to `/recordings` in the MediaMTX container. `mediamtx.yml` leaves `record` false and sets `recordPath` to `/recordings/%path/%Y-%m-%d/%H/%Y-%m-%d_%H-%M-%S-%f` with `recordFormat: fmp4`. `/etc/localtime` is mounted read-only, so the container clock matches this computer. Without that mount the container stays on UTC, and the time fields in `recordPath` follow UTC.
+Docker Compose bind-mounts `RECORDINGS_DIR` on this computer to `/recordings` in the MediaMTX container. When `RECORDINGS_DIR` is unset, that folder is `./recordings`. `mediamtx.yml` leaves `record` false and sets `recordPath` to `/recordings/%path/%Y-%m-%d/%H/%Y-%m-%d_%H-%M-%S-%f` with `recordFormat: fmp4`. `/etc/localtime` is mounted read-only, so the container clock matches this computer. Without that mount the container stays on UTC, and the time fields in `recordPath` follow UTC.
 
 ## Plugins
 

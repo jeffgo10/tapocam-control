@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { isPluginId, parseManifest, type PluginManifest } from "@/lib/plugin-manifest";
 import type { PluginListing, PluginSettingsView } from "@/lib/plugin-types";
+import { recordingsRoot } from "@/lib/recordings";
 
 type PluginModule = {
   activate: (options: { pluginRoot: string; recordingsDir: string }) => Promise<void>;
@@ -231,7 +232,7 @@ async function ensurePlugin(manifest: PluginManifest): Promise<PluginModule> {
   };
   await loaded.activate({
     pluginRoot,
-    recordingsDir: path.join(process.cwd(), "recordings"),
+    recordingsDir: recordingsRoot(),
   });
   slot().modules.set(manifest.id, loaded);
   return loaded;
