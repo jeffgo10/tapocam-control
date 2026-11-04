@@ -33,11 +33,13 @@ To use the page from a phone on the same network, set `WEBRTC_ADDITIONAL_HOSTS` 
 docker compose up -d --force-recreate
 ```
 
-## Recording
+## Volume
 
-Plugins are installed from the Plugins panel in this app. They run inside this process. Activating Recording starts saving every camera into `recordings/<camera>/<day>/<hour>/`. Each file is one minute long. The name is the local time when that minute started. Each camera keeps files for the time set on its Recording card, and the default is two weeks. Playback in the Recording tab plays that day's files as one timeline. While a camera is being saved, it stays streaming even when this page is closed. Deactivating or uninstalling the plugin stops that saving.
+Docker Compose bind-mounts `./recordings` on this computer to `/recordings` in the MediaMTX container. `mediamtx.yml` leaves `record` false and sets `recordPath` to `/recordings/%path/%Y-%m-%d/%H/%Y-%m-%d_%H-%M-%S-%f` with `recordFormat: fmp4`. `/etc/localtime` is mounted read-only, so the container clock matches this computer. Without that mount the container stays on UTC, and the time fields in `recordPath` follow UTC.
 
-The install list is read from `PLUGIN_CATALOG` in `.env`. When that is unset, the app looks in `../tapocam-extends/plugins`.
+## Plugins
+
+Plugins are installed from the Plugins panel in this app. They run inside this process. The install list is read from `PLUGIN_CATALOG` in `.env`. When that is unset, the app looks in `../tapocam-extends/plugins`.
 
 ## Ports
 
