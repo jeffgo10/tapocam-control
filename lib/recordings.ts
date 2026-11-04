@@ -18,6 +18,8 @@ export type RecordingSegment = {
 export type ByteRange = { start: number; end: number };
 
 export function recordingsRoot(): string {
+  const configured = process.env.RECORDINGS_DIR?.trim();
+  if (configured) return path.resolve(configured);
   return path.join(process.cwd(), "recordings");
 }
 
