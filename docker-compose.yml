@@ -35,6 +35,9 @@ services:
       MTX_WEBRTCADDITIONALHOSTS: ${WEBRTC_ADDITIONAL_HOSTS:-127.0.0.1}
     volumes:
       - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+      - ./recordings:/recordings
+      # Recording filenames use this clock. Without it the container stays on UTC.
+      - /etc/localtime:/etc/localtime:ro
 
 networks:
   tapocam:

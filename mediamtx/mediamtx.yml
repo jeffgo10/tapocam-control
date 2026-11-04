@@ -43,4 +43,12 @@ authInternalUsers:
       - action: playback
       - action: api
 
+# Recording stays off until a separate program enables one camera.
+# Segments are written into the /recordings mount from docker-compose.
+# Each camera is split into <day>/<hour> so one folder does not hold every file.
+# The clock is the container timezone, set from this computer in docker-compose.
+record: false
+recordPath: /recordings/%path/%Y-%m-%d/%H/%Y-%m-%d_%H-%M-%S-%f
+recordFormat: fmp4
+
 paths: {}

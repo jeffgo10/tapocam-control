@@ -5,7 +5,8 @@ import { requestJson } from "@/components/api";
 import { CameraLibrary } from "@/components/camera-library";
 import { CastControl } from "@/components/cast-control";
 import { CameraStage } from "@/components/camera-stage";
-import { PresetList } from "@/components/preset-list";
+import { BottomDock } from "@/components/bottom-dock";
+import { RecordingPlayback } from "@/components/recording-playback";
 import { PtzPad } from "@/components/ptz-pad";
 import { useViewPrefs, writeViewPrefs } from "@/components/view-prefs";
 import type {
@@ -43,6 +44,7 @@ export function Controller() {
   const [busyToken, setBusyToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [castDevice, setCastDevice] = useState<string | null>(null);
+  const [playback, setPlayback] = useState<{ id: string; name: string } | null>(null);
   const castLive = castDevice !== null;
   const movingRef = useRef(false);
 
@@ -304,38 +306,37 @@ export function Controller() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-4 py-5 sm:px-6 sm:py-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium tracking-[0.22em] text-accent uppercase">
-            Local
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">Tapo cameras</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <CastControl cameraIds={visibleIds} onLiveChange={setCastDevice} />
-          <div className="inline-flex rounded-xl border border-line p-1">
-            <ModeButton current={prefs.mode} mode="single" onSelect={setMode}>
-              Single
-            </ModeButton>
-            <ModeButton current={prefs.mode} mode="wall" onSelect={setMode}>
-              Wall
-            </ModeButton>
+    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-4 py-5 sm:px-6">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-medium tracking-[0.22em] text-accent uppercase">
+              Local
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight">Tapo cameras</h1>
           </div>
-        </div>
-      </header>
+          <div className="flex flex-wrap items-center gap-3">
+            <CastControl cameraIds={visibleIds} onLiveChange={setCastDevice} />
+            <div className="inline-flex rounded-xl border border-line p-1">
+              <ModeButton current={prefs.mode} mode="single" onSelect={setMode}>
+                Single
+              </ModeButton>
+              <ModeButton current={prefs.mode} mode="wall" onSelect={setMode}>
+                Wall
+              </ModeButton>
+            </div>
+          </div>
+        </header>
 
-      {error ? (
-        <p
-          role="alert"
-          className="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger"
-        >
-          {error}
-        </p>
-      ) : null}
+        {error ? (
+          <p
+            role="alert"
+            className="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger"
+          >
+            {error}
+          </p>
+        ) : null}
 
-      <div className="grid items-start gap-5 lg:grid-cols-[22rem_minmax(0,1fr)]">
-        <div className="grid gap-5">
+        <div className="grid items-start gap-5 lg:grid-cols-[22rem_minmax(0,1fr)]">
           <CameraLibrary
             cameras={cameras}
             loaded={loaded}
@@ -355,6 +356,18 @@ export function Controller() {
               void deleteCamera(id);
             }}
           />
+          <CameraStage
+            mode={prefs.mode}
+            cameras={cameras}
+            visibleIds={visibleIds}
+            activeId={activeId}
+            streams={streams}
+            onSelect={controlCamera}
+            onRetry={retryStream}
+            castDevice={castDevice}
+          />
+        </div>
+        <div className="grid items-start gap-5 lg:grid-cols-[22rem_minmax(0,1fr)]">
           <PtzPad
             disabled={!controlsReady}
             busy={moving}
@@ -362,26 +375,23 @@ export function Controller() {
               void move(command);
             }}
           />
-          <PresetList
+          <BottomDock
             presets={controlsReady ? presets : []}
-            disabled={!controlsReady}
+            presetsDisabled={!controlsReady}
             busyToken={busyToken}
             onGoto={(token) => {
               void goto(token);
             }}
+            onPlayback={setPlayback}
           />
         </div>
-        <CameraStage
-          mode={prefs.mode}
-          cameras={cameras}
-          visibleIds={visibleIds}
-          activeId={activeId}
-          streams={streams}
-          onSelect={controlCamera}
-          onRetry={retryStream}
-          castDevice={castDevice}
-        />
-      </div>
+        {playback ? (
+          <RecordingPlayback
+            cameraId={playback.id}
+            cameraName={playback.name}
+            onClose={() => setPlayback(null)}
+          />
+        ) : null}
     </div>
   );
 }

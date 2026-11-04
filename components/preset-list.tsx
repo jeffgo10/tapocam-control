@@ -16,16 +16,15 @@ export function PresetList({
   onGoto,
 }: PresetListProps) {
   return (
-    <section className="rounded-3xl border border-line bg-panel p-4">
-      <h2 className="text-sm font-semibold">Presets</h2>
+    <div>
       {presets.length === 0 ? (
-        <p className="mt-3 text-sm text-muted">
+        <p className="text-sm text-muted">
           {disabled
             ? "Connect to load positions saved on the camera."
             : "This camera has no saved presets."}
         </p>
       ) : (
-        <ul className="mt-3 grid gap-2">
+        <ul className="grid gap-2 sm:grid-cols-2">
           {presets.map((preset) => (
             <li key={preset.token}>
               <button
@@ -43,6 +42,6 @@ export function PresetList({
           ))}
         </ul>
       )}
-    </section>
+    </div>
   );
 }
