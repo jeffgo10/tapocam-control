@@ -45,6 +45,7 @@ authInternalUsers:
 
 # record stays false in this file. The control API can set it on one path.
 # recordPath is the /recordings bind mount from docker-compose.
+# That mount is RECORDINGS_DIR, or ./recordings when it is unset.
 # The template is the path name, then the calendar day, then the hour.
 # Time fields use the container clock. docker-compose mounts /etc/localtime.
 record: false

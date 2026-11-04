@@ -35,7 +35,9 @@ services:
       MTX_WEBRTCADDITIONALHOSTS: ${WEBRTC_ADDITIONAL_HOSTS:-127.0.0.1}
     volumes:
       - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
-      - ./recordings:/recordings
+      - type: bind
+        source: ${RECORDINGS_DIR:-./recordings}
+        target: /recordings
       # Clock for time fields under the bind mount above. Without it the container stays on UTC.
       - /etc/localtime:/etc/localtime:ro
 
