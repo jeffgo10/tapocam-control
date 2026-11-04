@@ -36,7 +36,7 @@ services:
     volumes:
       - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
       - ./recordings:/recordings
-      # Recording filenames use this clock. Without it the container stays on UTC.
+      # Clock for time fields under the bind mount above. Without it the container stays on UTC.
       - /etc/localtime:/etc/localtime:ro
 
 networks:

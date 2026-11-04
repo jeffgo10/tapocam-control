@@ -148,7 +148,7 @@ export async function setPluginKeep(
   unit: string,
 ): Promise<void> {
   const loaded = slot().modules.get(id);
-  if (!loaded?.setCameraKeep) throw new Error("Restart the app, then open Recording again.");
+  if (!loaded?.setCameraKeep) throw new Error("Restart the app, then open the plugin again.");
   await loaded.setCameraKeep(cameraId, amount, unit);
 }
 
