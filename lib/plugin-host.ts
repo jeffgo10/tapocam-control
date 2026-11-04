@@ -9,6 +9,7 @@ type PluginModule = {
   deactivate: () => Promise<void>;
   getSettings?: () => Promise<PluginSettingsView>;
   setCameraEnabled?: (cameraId: string, enabled: boolean) => Promise<void>;
+  setCameraKeep?: (cameraId: string, amount: number, unit: string) => Promise<void>;
 };
 
 type Slot = {
@@ -140,6 +141,17 @@ export async function setPluginCamera(id: string, cameraId: string, enabled: boo
   await loaded.setCameraEnabled(cameraId, enabled);
 }
 
+export async function setPluginKeep(
+  id: string,
+  cameraId: string,
+  amount: number,
+  unit: string,
+): Promise<void> {
+  const loaded = slot().modules.get(id);
+  if (!loaded?.setCameraKeep) throw new Error("Restart the app, then open Recording again.");
+  await loaded.setCameraKeep(cameraId, amount, unit);
+}
+
 export async function ensureActivePlugins(): Promise<void> {
   const active = await readActive();
   for (const id of active) {
@@ -211,6 +223,10 @@ async function ensurePlugin(manifest: PluginManifest): Promise<PluginModule> {
     setCameraEnabled:
       typeof imported.setCameraEnabled === "function"
         ? (imported.setCameraEnabled as PluginModule["setCameraEnabled"])
+        : undefined,
+    setCameraKeep:
+      typeof imported.setCameraKeep === "function"
+        ? (imported.setCameraKeep as PluginModule["setCameraKeep"])
         : undefined,
   };
   await loaded.activate({

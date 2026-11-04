@@ -35,7 +35,7 @@ docker compose up -d --force-recreate
 
 ## Recording
 
-Plugins are installed from the Plugins panel in this app. They run inside this process. Activating Recording starts saving every camera into `recordings/<camera>/<day>/<hour>/`. Each file is one minute long. The name is the local time when that minute started, and files older than two weeks are deleted. Playback in the Recording tab plays that day's files as one timeline. While a camera is being saved, it stays streaming even when this page is closed. Deactivating or uninstalling the plugin stops that saving.
+Plugins are installed from the Plugins panel in this app. They run inside this process. Activating Recording starts saving every camera into `recordings/<camera>/<day>/<hour>/`. Each file is one minute long. The name is the local time when that minute started. Each camera keeps files for the time set on its Recording card, and the default is two weeks. Playback in the Recording tab plays that day's files as one timeline. While a camera is being saved, it stays streaming even when this page is closed. Deactivating or uninstalling the plugin stops that saving.
 
 The install list is read from `PLUGIN_CATALOG` in `.env`. When that is unset, the app looks in `../tapocam-extends/plugins`.
 

@@ -4,6 +4,7 @@ export type PluginCameraSetting = {
   ip: string;
   enabled: boolean;
   status: string;
+  keep?: { amount: number; unit: "days" | "weeks" };
   files: { name: string; size: string; modified: string }[];
 };
 
