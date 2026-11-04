@@ -212,6 +212,17 @@ export function PluginSettings({
                     />
                   </div>
                 </div>
+                {plugin.id === "record" ? (
+                  <KeepControl
+                    key={`${camera.id}:${camera.keep?.amount ?? 2}:${camera.keep?.unit ?? "weeks"}`}
+                    pluginId={plugin.id}
+                    cameraId={camera.id}
+                    keep={camera.keep ?? { amount: 2, unit: "weeks" }}
+                    busy={busy !== null}
+                    pending={busy === `${plugin.id}:${camera.id}:keep`}
+                    onRun={onRun}
+                  />
+                ) : null}
                 {camera.files.length > 0 ? (
                   <ul className="mt-2 grid gap-1 text-xs text-muted">
                     {camera.files.map((file) => (
@@ -229,6 +240,88 @@ export function PluginSettings({
         <p className="text-sm text-muted">This plugin has no settings.</p>
       )}
     </div>
+  );
+}
+
+function KeepControl({
+  pluginId,
+  cameraId,
+  keep,
+  busy,
+  pending,
+  onRun,
+}: {
+  pluginId: string;
+  cameraId: string;
+  keep: { amount: number; unit: "days" | "weeks" };
+  busy: boolean;
+  pending: boolean;
+  onRun: (key: string, body: Record<string, unknown>) => void;
+}) {
+  const [amount, setAmount] = useState(String(keep.amount));
+  const [unit, setUnit] = useState<"days" | "weeks">(keep.unit);
+  const [invalid, setInvalid] = useState(false);
+  const max = unit === "weeks" ? 12 : 90;
+
+  return (
+    <form
+      className="mt-2 flex flex-wrap items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const parsed = Number(amount);
+        if (!Number.isInteger(parsed) || parsed < 1 || parsed > max) {
+          setInvalid(true);
+          return;
+        }
+        setInvalid(false);
+        onRun(`${pluginId}:${cameraId}:keep`, {
+          action: "keep",
+          id: pluginId,
+          cameraId,
+          amount: parsed,
+          unit,
+        });
+      }}
+    >
+      <label className="text-xs text-muted" htmlFor={`keep-${cameraId}`}>
+        Keep
+      </label>
+      <input
+        id={`keep-${cameraId}`}
+        type="number"
+        min={1}
+        max={max}
+        value={amount}
+        disabled={busy}
+        onChange={(event) => {
+          setAmount(event.target.value);
+          setInvalid(false);
+        }}
+        className="w-16 rounded-lg border border-line bg-transparent px-2 py-1 text-sm"
+      />
+      <select
+        value={unit}
+        disabled={busy}
+        aria-label="Keep unit"
+        onChange={(event) => {
+          const next = event.target.value === "weeks" ? "weeks" : "days";
+          setUnit(next);
+          setInvalid(false);
+        }}
+        className="rounded-lg border border-line bg-transparent px-2 py-1 text-sm"
+      >
+        <option value="days">days</option>
+        <option value="weeks">weeks</option>
+      </select>
+      <button
+        type="submit"
+        disabled={busy}
+        className="rounded-lg border border-line px-2 py-1 text-sm text-accent disabled:opacity-50"
+      >
+        {pending ? "Working…" : "Apply"}
+      </button>
+      {invalid ? <p className="basis-full text-xs text-danger">Use 1–90 days or 1–12 weeks.</p> : null}
+    </form>
   );
 }
 
