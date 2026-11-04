@@ -33,6 +33,17 @@ To use the page from a phone on the same network, set `WEBRTC_ADDITIONAL_HOSTS` 
 docker compose up -d --force-recreate
 ```
 
+## Start and stop
+
+On this Mac the app can start at login. Docker Desktop is set to open when you sign in, and MySQL and MediaMTX use `restart: unless-stopped`. A login agent then runs `npm start`, which serves the last production build. After you change the app, run `npm run build` again before expecting the new version.
+
+```bash
+./scripts/start.sh
+./scripts/kill.sh
+```
+
+`scripts/start.sh` loads that agent if it is not already running. `scripts/kill.sh` unloads it so launchd does not start it again, and stops a `npm start` on port 3000 when that process is this project. It stays stopped until the next login, or until you run `scripts/start.sh`. MySQL and MediaMTX keep running. Stop those with `docker compose stop`.
+
 ## Volume
 
 Docker Compose bind-mounts `RECORDINGS_DIR` on this computer to `/recordings` in the MediaMTX container. When `RECORDINGS_DIR` is unset, that folder is `./recordings`. `mediamtx.yml` leaves `record` false and sets `recordPath` to `/recordings/%path/%Y-%m-%d/%H/%Y-%m-%d_%H-%M-%S-%f` with `recordFormat: fmp4`. `/etc/localtime` is mounted read-only, so the container clock matches this computer. Without that mount the container stays on UTC, and the time fields in `recordPath` follow UTC.
