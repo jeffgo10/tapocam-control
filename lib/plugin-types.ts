@@ -1,3 +1,9 @@
+export type PluginPresetChoice = {
+  token: string;
+  name: string;
+  selected: boolean;
+};
+
 export type PluginCameraSetting = {
   id: string;
   name: string;
@@ -6,6 +12,8 @@ export type PluginCameraSetting = {
   status: string;
   keep?: { amount: number; unit: "days" | "weeks" };
   files: { name: string; size: string; modified: string }[];
+  intervalSeconds?: number;
+  presets?: PluginPresetChoice[];
 };
 
 export type PluginSettingsView = {

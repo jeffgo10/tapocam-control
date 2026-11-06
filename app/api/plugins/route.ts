@@ -5,7 +5,9 @@ import {
   installPlugin,
   listPlugins,
   setPluginCamera,
+  setPluginInterval,
   setPluginKeep,
+  setPluginPresets,
   uninstallPlugin,
 } from "@/lib/plugin-host";
 import { errorMessage, jsonError, readJson } from "@/lib/http";
@@ -30,6 +32,8 @@ export async function POST(request: Request) {
     enabled?: unknown;
     amount?: unknown;
     unit?: unknown;
+    seconds?: unknown;
+    tokens?: unknown;
   };
   if (typeof record.id !== "string") return jsonError("Plugin id is required.", 400);
   try {
@@ -51,9 +55,31 @@ export async function POST(request: Request) {
         return jsonError("Keep choice is invalid.", 400);
       }
       await setPluginKeep(record.id, record.cameraId, record.amount, record.unit);
+    } else if (record.action === "interval") {
+      if (typeof record.cameraId !== "string" || typeof record.seconds !== "number") {
+        return jsonError("Interval is invalid.", 400);
+      }
+      await setPluginInterval(record.id, record.cameraId, record.seconds);
+    } else if (record.action === "presets") {
+      if (typeof record.cameraId !== "string" || !isPresetSelection(record.tokens)) {
+        return jsonError("Preset choice is invalid.", 400);
+      }
+      await setPluginPresets(record.id, record.cameraId, record.tokens);
     } else return jsonError("Plugin action is invalid.", 400);
     return Response.json({ success: true, plugins: await listPlugins() });
   } catch (error) {
     return jsonError(errorMessage(error, "Could not update the plugin."), 400);
   }
+}
+
+function isPresetSelection(value: unknown): value is string[] | null {
+  if (value === null) return true;
+  if (!Array.isArray(value) || value.length > 32) return false;
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== "string" || item.trim() === "" || item.length > 128 || seen.has(item)) return false;
+    if (/[\u0000-\u001F\u007F]/.test(item)) return false;
+    seen.add(item);
+  }
+  return true;
 }
