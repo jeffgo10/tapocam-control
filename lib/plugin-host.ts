@@ -11,6 +11,8 @@ type PluginModule = {
   getSettings?: () => Promise<PluginSettingsView>;
   setCameraEnabled?: (cameraId: string, enabled: boolean) => Promise<void>;
   setCameraKeep?: (cameraId: string, amount: number, unit: string) => Promise<void>;
+  setCameraInterval?: (cameraId: string, seconds: number) => Promise<void>;
+  setCameraPresets?: (cameraId: string, tokens: string[] | null) => Promise<void>;
 };
 
 type Slot = {
@@ -30,8 +32,8 @@ function slot(): Slot {
 
 export function catalogDirectory(): string {
   const configured = process.env.PLUGIN_CATALOG?.trim();
-  if (configured) return path.resolve(process.cwd(), configured);
-  return path.resolve(process.cwd(), "../tapocam-extends/plugins");
+  if (configured) return path.resolve(/*turbopackIgnore: true*/ process.cwd(), configured);
+  return path.resolve(/*turbopackIgnore: true*/ process.cwd(), "../tapocam-extends/plugins");
 }
 
 function installedRoot(): string {
@@ -93,7 +95,7 @@ export async function installPlugin(id: string): Promise<void> {
   if (!isPluginId(id)) throw new Error("Plugin id is invalid.");
   const source = path.join(catalogDirectory(), id);
   const destination = path.join(installedRoot(), id);
-  if (path.resolve(source) === path.resolve(destination)) {
+  if (path.resolve(/*turbopackIgnore: true*/ source) === path.resolve(/*turbopackIgnore: true*/ destination)) {
     throw new Error("Plugin is already inside the app.");
   }
   const manifest = await readManifest(source, id);
@@ -153,6 +155,24 @@ export async function setPluginKeep(
   await loaded.setCameraKeep(cameraId, amount, unit);
 }
 
+export async function setPluginInterval(id: string, cameraId: string, seconds: number): Promise<void> {
+  const loaded = slot().modules.get(id);
+  if (!loaded) throw new Error("Activate the plugin first.");
+  if (!loaded.setCameraInterval) throw new Error("Restart the app, then open the plugin again.");
+  await loaded.setCameraInterval(cameraId, seconds);
+}
+
+export async function setPluginPresets(
+  id: string,
+  cameraId: string,
+  tokens: string[] | null,
+): Promise<void> {
+  const loaded = slot().modules.get(id);
+  if (!loaded) throw new Error("Activate the plugin first.");
+  if (!loaded.setCameraPresets) throw new Error("Restart the app, then open the plugin again.");
+  await loaded.setCameraPresets(cameraId, tokens);
+}
+
 export async function ensureActivePlugins(): Promise<void> {
   const active = await readActive();
   for (const id of active) {
@@ -203,8 +223,8 @@ export async function listPlugins(): Promise<PluginListing[]> {
 async function ensurePlugin(manifest: PluginManifest): Promise<PluginModule> {
   const existing = slot().modules.get(manifest.id);
   if (existing) return existing;
-  const pluginRoot = path.resolve(installedRoot(), manifest.id);
-  const entry = path.resolve(pluginRoot, manifest.entry);
+  const pluginRoot = path.resolve(/*turbopackIgnore: true*/ installedRoot(), manifest.id);
+  const entry = path.resolve(/*turbopackIgnore: true*/ pluginRoot, manifest.entry);
   if (entry !== pluginRoot && !entry.startsWith(`${pluginRoot}${path.sep}`)) {
     throw new Error("Plugin entry is invalid.");
   }
@@ -228,6 +248,14 @@ async function ensurePlugin(manifest: PluginManifest): Promise<PluginModule> {
     setCameraKeep:
       typeof imported.setCameraKeep === "function"
         ? (imported.setCameraKeep as PluginModule["setCameraKeep"])
+        : undefined,
+    setCameraInterval:
+      typeof imported.setCameraInterval === "function"
+        ? (imported.setCameraInterval as PluginModule["setCameraInterval"])
+        : undefined,
+    setCameraPresets:
+      typeof imported.setCameraPresets === "function"
+        ? (imported.setCameraPresets as PluginModule["setCameraPresets"])
         : undefined,
   };
   await loaded.activate({

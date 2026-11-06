@@ -198,7 +198,7 @@ export function PluginSettings({
                       />
                     ) : null}
                     <ActionButton
-                      label={camera.enabled ? "Stop" : "Save"}
+                      label={cameraToggleLabel(plugin.id, camera.enabled)}
                       busy={busy === `${plugin.id}:${camera.id}`}
                       disabled={busy !== null}
                       onClick={() =>
@@ -220,6 +220,18 @@ export function PluginSettings({
                     keep={camera.keep ?? { amount: 2, unit: "weeks" }}
                     busy={busy !== null}
                     pending={busy === `${plugin.id}:${camera.id}:keep`}
+                    onRun={onRun}
+                  />
+                ) : null}
+                {plugin.id === "preset-carousel" ? (
+                  <CarouselControl
+                    key={`${camera.id}:${camera.intervalSeconds ?? 60}`}
+                    pluginId={plugin.id}
+                    cameraId={camera.id}
+                    seconds={camera.intervalSeconds ?? 60}
+                    presets={camera.presets ?? []}
+                    busy={busy !== null}
+                    pendingInterval={busy === `${plugin.id}:${camera.id}:interval`}
                     onRun={onRun}
                   />
                 ) : null}
@@ -322,6 +334,110 @@ function KeepControl({
       </button>
       {invalid ? <p className="basis-full text-xs text-danger">Use 1–90 days or 1–12 weeks.</p> : null}
     </form>
+  );
+}
+
+function cameraToggleLabel(pluginId: string, enabled: boolean): string {
+  if (pluginId === "preset-carousel") return enabled ? "Stop" : "Start";
+  return enabled ? "Stop" : "Save";
+}
+
+function CarouselControl({
+  pluginId,
+  cameraId,
+  seconds,
+  presets,
+  busy,
+  pendingInterval,
+  onRun,
+}: {
+  pluginId: string;
+  cameraId: string;
+  seconds: number;
+  presets: { token: string; name: string; selected: boolean }[];
+  busy: boolean;
+  pendingInterval: boolean;
+  onRun: (key: string, body: Record<string, unknown>) => void;
+}) {
+  const [amount, setAmount] = useState(String(seconds));
+  const [invalid, setInvalid] = useState(false);
+
+  function togglePreset(token: string) {
+    const next = presets.flatMap((preset) => {
+      const selected = preset.token === token ? !preset.selected : preset.selected;
+      return selected ? [preset.token] : [];
+    });
+    onRun(`${pluginId}:${cameraId}:presets`, {
+      action: "presets",
+      id: pluginId,
+      cameraId,
+      tokens: next.length === presets.length ? null : next,
+    });
+  }
+
+  return (
+    <div className="mt-2 grid gap-2">
+      <form
+        className="flex flex-wrap items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const parsed = Number(amount);
+          if (!Number.isInteger(parsed) || parsed < 10 || parsed > 3600) {
+            setInvalid(true);
+            return;
+          }
+          setInvalid(false);
+          onRun(`${pluginId}:${cameraId}:interval`, {
+            action: "interval",
+            id: pluginId,
+            cameraId,
+            seconds: parsed,
+          });
+        }}
+      >
+        <label className="text-xs text-muted" htmlFor={`interval-${cameraId}`}>
+          Every
+        </label>
+        <input
+          id={`interval-${cameraId}`}
+          type="number"
+          min={10}
+          max={3600}
+          value={amount}
+          disabled={busy}
+          onChange={(event) => {
+            setAmount(event.target.value);
+            setInvalid(false);
+          }}
+          className="w-20 rounded-lg border border-line bg-transparent px-2 py-1 text-sm"
+        />
+        <span className="text-xs text-muted">sec</span>
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-lg border border-line px-2 py-1 text-sm text-accent disabled:opacity-50"
+        >
+          {pendingInterval ? "Working…" : "Apply"}
+        </button>
+        {invalid ? <p className="basis-full text-xs text-danger">Use 10–3600 seconds.</p> : null}
+      </form>
+      {presets.length > 0 ? (
+        <fieldset className="grid gap-1" disabled={busy}>
+          <legend className="text-xs text-muted">Presets</legend>
+          {presets.map((preset) => (
+            <label key={preset.token} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={preset.selected}
+                onChange={() => togglePreset(preset.token)}
+              />
+              <span>{preset.name}</span>
+            </label>
+          ))}
+          <p className="text-xs text-muted">New presets stay in the tour while every box is ticked.</p>
+        </fieldset>
+      ) : null}
+    </div>
   );
 }
 
