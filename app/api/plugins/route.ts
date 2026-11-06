@@ -7,6 +7,7 @@ import {
   setPluginCamera,
   setPluginInterval,
   setPluginKeep,
+  setPluginPresetInterval,
   setPluginPresets,
   uninstallPlugin,
 } from "@/lib/plugin-host";
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
     amount?: unknown;
     unit?: unknown;
     seconds?: unknown;
+    token?: unknown;
     tokens?: unknown;
   };
   if (typeof record.id !== "string") return jsonError("Plugin id is required.", 400);
@@ -65,6 +67,15 @@ export async function POST(request: Request) {
         return jsonError("Preset choice is invalid.", 400);
       }
       await setPluginPresets(record.id, record.cameraId, record.tokens);
+    } else if (record.action === "preset-interval") {
+      if (
+        typeof record.cameraId !== "string" ||
+        !isPresetToken(record.token) ||
+        !isPresetWait(record.seconds)
+      ) {
+        return jsonError("Preset wait is invalid.", 400);
+      }
+      await setPluginPresetInterval(record.id, record.cameraId, record.token, record.seconds);
     } else return jsonError("Plugin action is invalid.", 400);
     return Response.json({ success: true, plugins: await listPlugins() });
   } catch (error) {
@@ -72,13 +83,20 @@ export async function POST(request: Request) {
   }
 }
 
+function isPresetToken(value: unknown): value is string {
+  return typeof value === "string" && value.trim() !== "" && value.length <= 128 && !/[\u0000-\u001F\u007F]/.test(value);
+}
+
+function isPresetWait(value: unknown): value is number | null {
+  return value === null || typeof value === "number";
+}
+
 function isPresetSelection(value: unknown): value is string[] | null {
   if (value === null) return true;
   if (!Array.isArray(value) || value.length > 32) return false;
   const seen = new Set<string>();
   for (const item of value) {
-    if (typeof item !== "string" || item.trim() === "" || item.length > 128 || seen.has(item)) return false;
-    if (/[\u0000-\u001F\u007F]/.test(item)) return false;
+    if (!isPresetToken(item) || seen.has(item)) return false;
     seen.add(item);
   }
   return true;

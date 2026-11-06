@@ -2,6 +2,7 @@ export type PluginPresetChoice = {
   token: string;
   name: string;
   selected: boolean;
+  seconds?: number | null;
 };
 
 export type PluginCameraSetting = {

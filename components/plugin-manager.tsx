@@ -230,8 +230,7 @@ export function PluginSettings({
                     cameraId={camera.id}
                     seconds={camera.intervalSeconds ?? 60}
                     presets={camera.presets ?? []}
-                    busy={busy !== null}
-                    pendingInterval={busy === `${plugin.id}:${camera.id}:interval`}
+                    busyId={busy}
                     onRun={onRun}
                   />
                 ) : null}
@@ -347,18 +346,18 @@ function CarouselControl({
   cameraId,
   seconds,
   presets,
-  busy,
-  pendingInterval,
+  busyId,
   onRun,
 }: {
   pluginId: string;
   cameraId: string;
   seconds: number;
-  presets: { token: string; name: string; selected: boolean }[];
-  busy: boolean;
-  pendingInterval: boolean;
+  presets: { token: string; name: string; selected: boolean; seconds?: number | null }[];
+  busyId: string | null;
   onRun: (key: string, body: Record<string, unknown>) => void;
 }) {
+  const busy = busyId !== null;
+  const pendingInterval = busyId === `${pluginId}:${cameraId}:interval`;
   const [amount, setAmount] = useState(String(seconds));
   const [invalid, setInvalid] = useState(false);
 
@@ -425,19 +424,119 @@ function CarouselControl({
         <fieldset className="grid gap-1" disabled={busy}>
           <legend className="text-xs text-muted">Presets</legend>
           {presets.map((preset) => (
-            <label key={preset.token} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={preset.selected}
-                onChange={() => togglePreset(preset.token)}
-              />
-              <span>{preset.name}</span>
-            </label>
+            <div key={`${preset.token}:${preset.seconds ?? ""}`} className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={preset.selected}
+                  onChange={() => togglePreset(preset.token)}
+                />
+                <span>{preset.name}</span>
+              </label>
+              {preset.selected ? (
+                <PresetWait
+                  pluginId={pluginId}
+                  cameraId={cameraId}
+                  token={preset.token}
+                  name={preset.name}
+                  seconds={preset.seconds ?? null}
+                  fallback={seconds}
+                  busy={busy}
+                  pending={busyId === `${pluginId}:${cameraId}:preset:${preset.token}`}
+                  onRun={onRun}
+                />
+              ) : null}
+            </div>
           ))}
-          <p className="text-xs text-muted">New presets stay in the tour while every box is ticked.</p>
+          <p className="text-xs text-muted">
+            New presets stay in the tour while every box is ticked. A blank preset wait uses the camera wait.
+          </p>
         </fieldset>
       ) : null}
     </div>
+  );
+}
+
+function PresetWait({
+  pluginId,
+  cameraId,
+  token,
+  name,
+  seconds,
+  fallback,
+  busy,
+  pending,
+  onRun,
+}: {
+  pluginId: string;
+  cameraId: string;
+  token: string;
+  name: string;
+  seconds: number | null;
+  fallback: number;
+  busy: boolean;
+  pending: boolean;
+  onRun: (key: string, body: Record<string, unknown>) => void;
+}) {
+  const [amount, setAmount] = useState(seconds === null ? "" : String(seconds));
+  const [invalid, setInvalid] = useState(false);
+
+  return (
+    <form
+      className="flex flex-wrap items-center gap-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const trimmed = amount.trim();
+        if (trimmed === "") {
+          setInvalid(false);
+          onRun(`${pluginId}:${cameraId}:preset:${token}`, {
+            action: "preset-interval",
+            id: pluginId,
+            cameraId,
+            token,
+            seconds: null,
+          });
+          return;
+        }
+        const parsed = Number(trimmed);
+        if (!Number.isInteger(parsed) || parsed < 10 || parsed > 3600) {
+          setInvalid(true);
+          return;
+        }
+        setInvalid(false);
+        onRun(`${pluginId}:${cameraId}:preset:${token}`, {
+          action: "preset-interval",
+          id: pluginId,
+          cameraId,
+          token,
+          seconds: parsed,
+        });
+      }}
+    >
+      <input
+        type="number"
+        min={10}
+        max={3600}
+        value={amount}
+        placeholder={String(fallback)}
+        aria-label={`Seconds at ${name}`}
+        disabled={busy}
+        onChange={(event) => {
+          setAmount(event.target.value);
+          setInvalid(false);
+        }}
+        className="w-16 rounded-lg border border-line bg-transparent px-2 py-1 text-sm"
+      />
+      <span className="text-xs text-muted">sec</span>
+      <button
+        type="submit"
+        disabled={busy}
+        className="rounded-lg border border-line px-2 py-1 text-sm text-accent disabled:opacity-50"
+      >
+        {pending ? "Working…" : "Apply"}
+      </button>
+      {invalid ? <p className="basis-full text-xs text-danger">Use 10–3600 seconds.</p> : null}
+    </form>
   );
 }
 
