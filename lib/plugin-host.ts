@@ -13,6 +13,7 @@ type PluginModule = {
   setCameraKeep?: (cameraId: string, amount: number, unit: string) => Promise<void>;
   setCameraInterval?: (cameraId: string, seconds: number) => Promise<void>;
   setCameraPresets?: (cameraId: string, tokens: string[] | null) => Promise<void>;
+  setCameraPresetInterval?: (cameraId: string, token: string, seconds: number | null) => Promise<void>;
 };
 
 type Slot = {
@@ -173,6 +174,18 @@ export async function setPluginPresets(
   await loaded.setCameraPresets(cameraId, tokens);
 }
 
+export async function setPluginPresetInterval(
+  id: string,
+  cameraId: string,
+  token: string,
+  seconds: number | null,
+): Promise<void> {
+  const loaded = slot().modules.get(id);
+  if (!loaded) throw new Error("Activate the plugin first.");
+  if (!loaded.setCameraPresetInterval) throw new Error("Restart the app, then open the plugin again.");
+  await loaded.setCameraPresetInterval(cameraId, token, seconds);
+}
+
 export async function ensureActivePlugins(): Promise<void> {
   const active = await readActive();
   for (const id of active) {
@@ -256,6 +269,10 @@ async function ensurePlugin(manifest: PluginManifest): Promise<PluginModule> {
     setCameraPresets:
       typeof imported.setCameraPresets === "function"
         ? (imported.setCameraPresets as PluginModule["setCameraPresets"])
+        : undefined,
+    setCameraPresetInterval:
+      typeof imported.setCameraPresetInterval === "function"
+        ? (imported.setCameraPresetInterval as PluginModule["setCameraPresetInterval"])
         : undefined,
   };
   await loaded.activate({
