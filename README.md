@@ -52,6 +52,8 @@ Docker Compose bind-mounts `RECORDINGS_DIR` on this computer to `/recordings` in
 
 Plugins are installed from the Plugins panel in this app. They run inside this process. The install list is read from `PLUGIN_CATALOG` in `.env`. When that is unset, the app looks in `../tapocam-extends/plugins`.
 
+Preset carousel steps a camera through the positions saved on it. In that plugin's settings, start or stop each camera, set the wait (60 seconds unless you change it, from 10 seconds to 60 minutes), and untick presets you want to skip. Until you untick any, it uses every preset.
+
 ## Ports
 
 | Service | Port | Purpose |
