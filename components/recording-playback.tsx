@@ -9,7 +9,10 @@ type DayResponse = { day: string; segments: Segment[] };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
+const SPEEDS = [1, 2, 4, 8] as const;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+type Speed = (typeof SPEEDS)[number];
 
 type RecordingPlaybackProps = {
   cameraId: string;
@@ -27,12 +30,14 @@ export function RecordingPlayback({ cameraId, cameraName, onClose }: RecordingPl
   const clipRef = useRef<string | null>(null);
   const readyClip = useRef<string | null>(null);
   const offsetRef = useRef(0);
+  const speedRef = useRef<Speed>(1);
   const grabRef = useRef<{ x: number; playhead: number; moved: boolean } | null>(null);
   const [day, setDay] = useState(dayKey(new Date()));
   const [segments, setSegments] = useState<Segment[]>([]);
   const [playhead, setPlayhead] = useState(dayStartMs(dayKey(new Date())));
   const [span, setSpan] = useState(4 * HOUR_MS);
   const [paused, setPaused] = useState(true);
+  const [speed, setSpeed] = useState<Speed>(1);
   const [error, setError] = useState<string | null>(null);
   const [empty, setEmpty] = useState(false);
 
@@ -61,6 +66,7 @@ export function RecordingPlayback({ cameraId, cameraName, onClose }: RecordingPl
       clipRef,
       readyClip,
       offsetRef,
+      speed: speedRef.current,
       setPlayhead,
       setPaused,
     });
@@ -88,6 +94,7 @@ export function RecordingPlayback({ cameraId, cameraName, onClose }: RecordingPl
           clipRef,
           readyClip,
           offsetRef,
+          speed: speedRef.current,
           setPlayhead,
           setPaused,
         });
@@ -136,9 +143,17 @@ export function RecordingPlayback({ cameraId, cameraName, onClose }: RecordingPl
     const video = videoRef.current;
     if (!video) return;
     readyClip.current = clipRef.current;
+    video.playbackRate = speedRef.current;
     if (Math.abs(video.currentTime - offsetRef.current) > 0.2) {
       video.currentTime = offsetRef.current;
     }
+  }
+
+  function chooseSpeed(next: Speed) {
+    speedRef.current = next;
+    setSpeed(next);
+    const video = videoRef.current;
+    if (video) video.playbackRate = next;
   }
 
   function onTime() {
@@ -153,7 +168,8 @@ export function RecordingPlayback({ cameraId, cameraName, onClose }: RecordingPl
     setPlayhead(ms);
     const length = (segment.end - segment.start) / 1000;
     const limit = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : length;
-    if (video.paused || video.currentTime < limit - 0.3) return;
+    const lead = Math.max(0.3, (video.playbackRate || 1) * 0.25);
+    if (!video.ended && (video.paused || video.currentTime < limit - lead)) return;
     if (advancing.current === name) return;
     advancing.current = name;
     const index = segmentsRef.current.findIndex((item) => item.name === name);
@@ -219,13 +235,31 @@ export function RecordingPlayback({ cameraId, cameraName, onClose }: RecordingPl
           onPause={() => setPaused(true)}
           onClick={togglePlay}
         />
-        <button
-          type="button"
-          onClick={togglePlay}
-          className="absolute bottom-3 left-3 rounded-full bg-black/70 px-3 py-1 text-sm text-white"
-        >
-          {paused ? "Play" : "Pause"}
-        </button>
+        <div className="absolute bottom-3 left-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={togglePlay}
+            className="rounded-full bg-black/70 px-3 py-1 text-sm text-white"
+          >
+            {paused ? "Play" : "Pause"}
+          </button>
+          <div role="group" aria-label="Playback speed" className="flex overflow-hidden rounded-full bg-black/70 text-sm">
+            {SPEEDS.map((value) => {
+              const selected = speed === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => chooseSpeed(value)}
+                  className={`px-2.5 py-1 ${selected ? "bg-white text-black" : "text-white"}`}
+                >
+                  {value}x
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
       <div className="grid gap-3 px-4 py-4">
         {error ? (
@@ -333,6 +367,7 @@ function showClip(input: {
   clipRef: { current: string | null };
   readyClip: { current: string | null };
   offsetRef: { current: number };
+  speed: number;
   setPlayhead: (value: number) => void;
   setPaused: (value: boolean) => void;
 }) {
@@ -364,6 +399,7 @@ function showClip(input: {
   } else if (Math.abs(input.video.currentTime - located.offset) > 0.35) {
     input.video.currentTime = located.offset;
   }
+  input.video.playbackRate = input.speed;
   if (input.autoplay) {
     void input.video.play().then(
       () => input.setPaused(false),
