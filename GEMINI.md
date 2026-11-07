@@ -11,7 +11,7 @@ The same skills live in `.agents/skills/` and are linked for Claude (`.claude/sk
 | Skill | Use when |
 |---|---|
 | `handoff` | Compact this session into a temp-file handoff |
-| `create-github-pr` | Open a PR into `dev`, promote `dev` → `master`, hotfix, or clean up a merged branch |
+| `create-github-pr` | Open a PR into `master`, hotfix, or clean up a merged branch |
 | `tapocam-explore` | Trace a flow before changing it |
 | `tapocam-verifier` | Check a change against the stream, PTZ, and cast constraints |
 

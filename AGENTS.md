@@ -15,7 +15,7 @@ Shared by Claude, Cursor, and Antigravity. Source of truth is `.agents/skills/` 
 | Skill | Use when |
 |---|---|
 | `handoff` | Compact this session into a temp-file handoff |
-| `create-github-pr` | Open a PR into `dev`, promote `dev` → `master`, hotfix, or clean up a merged branch |
+| `create-github-pr` | Open a PR into `master`, hotfix, or clean up a merged branch |
 | `tapocam-explore` | Trace cameras, WebRTC, PTZ, presets, or cast before editing |
 | `tapocam-verifier` | Check a change against `README.md` stream, PTZ, and cast constraints |
 

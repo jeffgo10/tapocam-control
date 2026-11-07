@@ -1,7 +1,7 @@
 ---
 name: create-github-pr
-description: Analyze branch commits, draft a PR, and open it with gh. Cleanup syncs the base after a merge. Hotfix promotes feature to dev to master.
-argument-hint: "draft only | to master | hotfix | cleanup | title: …"
+description: Analyze branch commits, draft a PR, and open it with gh. Cleanup syncs master after a merge. Hotfix merges into master.
+argument-hint: "draft only | hotfix | cleanup | title: …"
 disable-model-invocation: true
 ---
 
