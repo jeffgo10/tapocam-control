@@ -54,6 +54,7 @@ export type CastRequest = {
   overscan: boolean;
   deviceName: string;
   hdmi: boolean;
+  sender: "browser" | "server";
 };
 
 export type CastStream = {
@@ -97,14 +98,23 @@ export function parseCastRequest(body: unknown): ParseResult<CastRequest> {
   }
   const deviceName = parseCastDeviceName(body.deviceName);
   if (!deviceName.ok) return deviceName;
+  if (body.sender !== undefined && body.sender !== "browser" && body.sender !== "server") {
+    return { ok: false, error: "Cast sender is invalid." };
+  }
+  const beat = body.beat === true;
+  const sender = body.sender === "server" ? "server" : "browser";
+  if (sender === "server" && !beat && !deviceName.value) {
+    return { ok: false, error: "Choose a Cast device." };
+  }
   return {
     ok: true,
     value: {
       cameraIds: ids,
-      beat: body.beat === true,
+      beat,
       overscan: body.overscan === true,
       deviceName: deviceName.value,
       hdmi: body.hdmi === true,
+      sender,
     },
   };
 }

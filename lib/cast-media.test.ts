@@ -34,6 +34,7 @@ describe("cast request", () => {
         overscan: false,
         deviceName: "",
         hdmi: false,
+        sender: "browser",
       },
     });
     assert.deepEqual(
@@ -46,11 +47,18 @@ describe("cast request", () => {
           overscan: false,
           deviceName: "Office display",
           hdmi: true,
+          sender: "browser",
         },
       },
     );
     assert.equal(parseCastRequest({ cameraIds: [CAMERA_A], overscan: "yes" }).ok, false);
     assert.equal(parseCastRequest({ cameraIds: [CAMERA_A], deviceName: "bad\nname" }).ok, false);
+    assert.equal(parseCastRequest({ cameraIds: [CAMERA_A], sender: "tv" }).ok, false);
+    assert.equal(parseCastRequest({ cameraIds: [CAMERA_A], sender: "server" }).ok, false);
+    assert.equal(
+      parseCastRequest({ cameraIds: [CAMERA_A], sender: "server", deviceName: "Office display" }).ok,
+      true,
+    );
   });
 
   it("rejects an empty selection and more than four cameras", () => {
