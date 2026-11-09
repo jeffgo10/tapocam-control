@@ -62,17 +62,173 @@ export async function findCastModel(friendlyName: string): Promise<string | null
   }
 }
 
+const SRV = 33;
+const A = 1;
+const CAST_PORT = 8009;
+
+export type CastEndpoint = {
+  name: string;
+  model: string;
+  address: string;
+  port: number;
+};
+
+export type CastSighting = {
+  texts: Map<string, { name: string; model: string }>;
+  services: Map<string, { host: string; port: number }>;
+  addresses: Map<string, string>;
+};
+
+export function emptyCastSighting(): CastSighting {
+  return {
+    texts: new Map(),
+    services: new Map(),
+    addresses: new Map(),
+  };
+}
+
+// A Cast receiver is only dialed at an address learned from its own advertisement.
+export function isCastTarget(address: string): boolean {
+  if (/^(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(address)) {
+    const [first, second] = address.split(".").map(Number);
+    if (first === 0 || first === 127 || first >= 224) return false;
+    if (first === 169 && second === 254) return false;
+    return true;
+  }
+  return (
+    address.length > ".local".length &&
+    address.length <= 253 &&
+    address.endsWith(".local") &&
+    /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(
+      address,
+    )
+  );
+}
+
+export function noteCastPacket(sighting: CastSighting, packet: Buffer): void {
+  for (const record of dnsRecords(packet)) {
+    const key = record.name.toLowerCase();
+    if (record.type === TXT && key.includes("_googlecast._tcp")) {
+      const fields = txtFields(record.data);
+      const name = fields.fn?.trim() ?? "";
+      if (!name) continue;
+      sighting.texts.set(key, { name, model: fields.md?.trim() ?? "" });
+      continue;
+    }
+    if (record.type === SRV && key.includes("_googlecast._tcp")) {
+      if (record.dataOffset + 6 > packet.length) continue;
+      const port = packet.readUInt16BE(record.dataOffset + 4);
+      const host = decodeDnsName(packet, record.dataOffset + 6).name;
+      if (!host || port !== CAST_PORT) continue;
+      sighting.services.set(key, { host, port });
+      continue;
+    }
+    if (record.type === A && record.data.length === 4) {
+      const address = [...record.data].join(".");
+      if (isCastTarget(address)) sighting.addresses.set(key, address);
+    }
+  }
+}
+
+export function castEndpointsFrom(sighting: CastSighting): CastEndpoint[] {
+  const found: CastEndpoint[] = [];
+  const seen = new Set<string>();
+  for (const [instance, text] of sighting.texts) {
+    const service = sighting.services.get(instance);
+    const host = service?.host ?? "";
+    const address =
+      (host ? sighting.addresses.get(host.toLowerCase()) : "") ||
+      sighting.addresses.get(instance) ||
+      (host && isCastTarget(host) ? host : "");
+    if (!address || seen.has(text.name.toLowerCase())) continue;
+    seen.add(text.name.toLowerCase());
+    found.push({
+      name: text.name,
+      model: text.model,
+      address,
+      port: CAST_PORT,
+    });
+  }
+  return found;
+}
+
+let endpointCache: { at: number; endpoints: CastEndpoint[] } | null = null;
+
+export async function findCastEndpoint(friendlyName: string): Promise<CastEndpoint | null> {
+  const wanted = friendlyName.trim().toLowerCase();
+  if (!wanted) return null;
+  const cached =
+    endpointCache && Date.now() - endpointCache.at < 15_000 ? endpointCache.endpoints : null;
+  const hit = cached?.find((device) => device.name.toLowerCase() === wanted);
+  if (hit) return hit;
+  try {
+    const endpoints = await discoverCastEndpoints(1200, friendlyName);
+    endpointCache = { at: Date.now(), endpoints };
+    return endpoints.find((device) => device.name.toLowerCase() === wanted) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function listCastDevices(): Promise<{ name: string; model: string }[]> {
+  try {
+    const endpoints = await discoverCastEndpoints(1200);
+    endpointCache = { at: Date.now(), endpoints };
+    return endpoints
+      .map((device) => ({ name: device.name, model: device.model }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  } catch {
+    return [];
+  }
+}
+
 export function discoverCastAdvertisements(
   timeoutMs = 1000,
   friendlyName = "",
 ): Promise<CastAdvertisement[]> {
+  return collectCastPackets(timeoutMs, (packets) => {
+    if (!friendlyName) return false;
+    const found = packets.flatMap((packet) => castAdvertisements(packet));
+    return matchCastModel(found, friendlyName) !== null;
+  }).then((packets) => {
+    const found = new Map<string, CastAdvertisement>();
+    for (const packet of packets) {
+      for (const device of castAdvertisements(packet)) {
+        found.set(device.name.toLowerCase(), device);
+      }
+    }
+    return [...found.values()];
+  });
+}
+
+export function discoverCastEndpoints(
+  timeoutMs = 1200,
+  friendlyName = "",
+): Promise<CastEndpoint[]> {
+  const wanted = friendlyName.trim().toLowerCase();
+  return collectCastPackets(timeoutMs, (packets) => {
+    if (!wanted) return false;
+    const sighting = emptyCastSighting();
+    for (const packet of packets) noteCastPacket(sighting, packet);
+    return castEndpointsFrom(sighting).some((device) => device.name.toLowerCase() === wanted);
+  }).then((packets) => {
+    const sighting = emptyCastSighting();
+    for (const packet of packets) noteCastPacket(sighting, packet);
+    return castEndpointsFrom(sighting);
+  });
+}
+
+function collectCastPackets(
+  timeoutMs: number,
+  stopEarly: (packets: Buffer[]) => boolean,
+): Promise<Buffer[]> {
   return new Promise((resolve) => {
     const socket = openSocket();
     if (!socket) {
       resolve([]);
       return;
     }
-    const found = new Map<string, CastAdvertisement>();
+    const packets: Buffer[] = [];
     let settled = false;
     const finish = () => {
       if (settled) return;
@@ -84,14 +240,12 @@ export function discoverCastAdvertisements(
       } catch {
         // The socket was never bound.
       }
-      resolve([...found.values()]);
+      resolve(packets);
     };
 
     const take = (message: Buffer) => {
-      for (const device of castAdvertisements(message)) {
-        found.set(device.name.toLowerCase(), device);
-      }
-      if (friendlyName && matchCastModel([...found.values()], friendlyName)) finish();
+      packets.push(message);
+      if (stopEarly(packets)) finish();
     };
 
     const listen = () => {
@@ -161,6 +315,7 @@ type DnsRecord = {
   name: string;
   type: number;
   data: Buffer;
+  dataOffset: number;
 };
 
 function dnsRecords(packet: Buffer): DnsRecord[] {
@@ -183,7 +338,7 @@ function dnsRecords(packet: Buffer): DnsRecord[] {
     const start = offset + 10;
     const end = start + length;
     if (end > packet.length) break;
-    records.push({ name: decoded.name, type, data: packet.subarray(start, end) });
+    records.push({ name: decoded.name, type, data: packet.subarray(start, end), dataOffset: start });
     offset = end;
   }
   return records;

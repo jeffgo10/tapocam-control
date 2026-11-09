@@ -53,6 +53,17 @@ declare global {
 let sdkPromise: Promise<boolean> | null = null;
 let configured = false;
 
+// Chrome only exposes Cast on a secure page. The installed app opens from this
+// computer's LAN name, which is not a secure page, so the Cast API is missing there.
+export function castBrowserReady(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.isSecureContext &&
+    Boolean(window.chrome) &&
+    "presentation" in navigator
+  );
+}
+
 export function loadCastSdk(): Promise<boolean> {
   if (typeof window === "undefined") return Promise.resolve(false);
   if (window.cast?.framework && window.chrome?.cast) return Promise.resolve(true);

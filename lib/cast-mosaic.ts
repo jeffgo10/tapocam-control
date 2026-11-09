@@ -26,6 +26,7 @@ import {
   removeRtspSource,
   streamPathFor,
 } from "@/lib/mediamtx";
+import { stopCastDevice } from "@/lib/cast-sender";
 import { castSourcePathFor } from "@/lib/paths";
 import { buildRtspUrl } from "@/lib/rtsp";
 import type { CameraRecord } from "@/lib/cameras";
@@ -43,6 +44,7 @@ type Store = {
   failure: string | null;
   timer: ReturnType<typeof setInterval> | null;
   chain: Promise<void>;
+  epoch: number;
 };
 
 function store(): Store {
@@ -57,6 +59,7 @@ function store(): Store {
       failure: null,
       timer: null,
       chain: Promise.resolve(),
+      epoch: 0,
     };
   }
   return globalStore.__tapocamCast;
@@ -159,10 +162,14 @@ export async function startCastMosaic(
   }
 }
 
+export function castEpoch(): number {
+  return store().epoch ?? 0;
+}
+
 export function stopCastMosaic(force = true): Promise<void> {
   return exclusive(async () => {
     if (!force && !store().key && !store().child) return;
-    await stopUnlocked();
+    await stopUnlocked(true);
   });
 }
 
@@ -208,8 +215,9 @@ async function launchUnlocked(paths: string[], overscan: boolean, beat: boolean)
   return true;
 }
 
-async function stopUnlocked(): Promise<void> {
+async function stopUnlocked(releaseReceiver = false): Promise<void> {
   const current = store();
+  if (releaseReceiver) current.epoch = (current.epoch ?? 0) + 1;
   current.key = null;
   const child = current.child;
   const sources = current.sources ?? [];
@@ -217,6 +225,7 @@ async function stopUnlocked(): Promise<void> {
   current.sources = [];
   current.logs = "";
   current.failure = null;
+  if (releaseReceiver) await stopCastDevice().catch(() => undefined);
   await runDocker(["rm", "-f", CAST_CONTAINER]).catch(() => undefined);
   if (child && child.exitCode === null) child.kill("SIGTERM");
   await removeRtspSource(CAST_PATH);
@@ -238,7 +247,7 @@ function armSweeper(): void {
         latest.lastBeat = read;
         return;
       }
-      await stopUnlocked();
+      await stopUnlocked(true);
     });
   }, 10_000);
   timer.unref();

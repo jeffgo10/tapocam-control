@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { requestJson } from "@/components/api";
 import {
+  castBrowserReady,
   castContext,
   castDeviceName,
   castFailure,
@@ -34,6 +35,7 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
   const [status, setStatus] = useState<"idle" | "starting" | "live">("idle");
   const [dismissed, setDismissed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [choices, setChoices] = useState<{ name: string }[]>([]);
   const [attempt, setAttempt] = useState(0);
   const publishedKey = useRef<string | null>(null);
   const casting = useRef(false);
@@ -44,6 +46,7 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
   const endingSession = useRef(false);
   const forcedStop = useRef(false);
   const overscanChoice = useRef(false);
+  const serverSender = useRef(false);
 
   const live = !dismissed && status === "live" && deviceName !== null;
   const connecting = !dismissed && status === "starting";
@@ -77,6 +80,7 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
     publishedKey.current = null;
     casting.current = false;
     setDeviceName(null);
+    setChoices([]);
     setStatus("idle");
   }
 
@@ -185,18 +189,20 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
       setCastStatus("starting");
       setMessage(null);
       try {
+        const server = serverSender.current;
         const prepared = await requestJson<CastResponse>("/api/cast", {
           method: "POST",
           body: JSON.stringify({
             cameraIds: cameraKey.split("|"),
             deviceName,
-            hdmi: castHdmiActive(),
+            hdmi: server ? false : castHdmiActive(),
+            ...(server ? { sender: "server" } : {}),
           }),
           signal: controller.signal,
         });
         if (generation.current !== token || dismissedRef.current) return;
         overscanChoice.current = prepared.overscan === true;
-        await loadCastMedia(prepared.hlsUrl, prepared.title, prepared.startAt);
+        if (!server) await loadCastMedia(prepared.hlsUrl, prepared.title, prepared.startAt);
         if (generation.current !== token || dismissedRef.current) return;
         publishedKey.current = requestId;
         setCastStatus("live");
@@ -215,18 +221,21 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
   useEffect(() => {
     if (dismissed || !deviceName || status !== "live" || !cameraKey) return;
     const controller = new AbortController();
+    const server = serverSender.current;
     const timer = window.setInterval(() => {
       void requestJson<CastResponse>("/api/cast", {
         method: "POST",
         body: JSON.stringify({
           cameraIds: cameraKey.split("|"),
+          deviceName,
           beat: true,
           overscan: overscanChoice.current,
+          ...(server ? { sender: "server" } : {}),
         }),
         signal: controller.signal,
       })
         .then((prepared) => {
-          if (controller.signal.aborted || !prepared.restarted) return;
+          if (controller.signal.aborted || !prepared.restarted || server) return;
           return loadCastMedia(prepared.hlsUrl, prepared.title, prepared.startAt);
         })
         .catch((error: unknown) => {
@@ -254,6 +263,11 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
       releaseCast();
       return;
     }
+    if (choices.length > 0) {
+      setChoices([]);
+      setMessage(null);
+      return;
+    }
     if (!dismissed && deviceName) {
       setMessage(null);
       setAttempt((value) => value + 1);
@@ -264,14 +278,19 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
     const epoch = round.current;
     dismissedRef.current = false;
     setDismissed(false);
+    setChoices([]);
     setMessage(null);
     setCastStatus("starting");
     try {
+      if (!castBrowserReady()) {
+        await showServerDevices(epoch);
+        return;
+      }
+      serverSender.current = false;
       const available = await loadCastSdk();
       if (round.current !== epoch || dismissedRef.current) return;
       if (!available) {
-        setCastStatus("idle");
-        setMessage("Cast works in desktop Chrome, on the same Wi-Fi as the Nest display.");
+        await showServerDevices(epoch);
         return;
       }
       await requestCastSession();
@@ -286,6 +305,24 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
       setCastStatus("idle");
       setMessage(castFailure(error));
     }
+  }
+
+  async function showServerDevices(epoch: number) {
+    serverSender.current = true;
+    const found = await requestJson<{ devices: { name: string }[] }>("/api/cast");
+    if (round.current !== epoch || dismissedRef.current) return;
+    const devices = found.devices.filter((device) => device.name.trim());
+    if (devices.length === 0) {
+      setCastStatus("idle");
+      setMessage("No Nest display responded. Keep this computer and the display on the same Wi-Fi.");
+      return;
+    }
+    if (devices.length === 1) {
+      setDeviceName(devices[0].name);
+      return;
+    }
+    setChoices(devices);
+    setCastStatus("idle");
   }
 
   const disabled = cameraIds.length === 0;
@@ -315,10 +352,32 @@ export function CastControl({ cameraIds, onLiveChange }: CastControlProps) {
           ? deviceName
           : connecting
             ? "Connecting…"
-            : !dismissed && deviceName
-              ? "Retry cast"
-              : "Cast"}
+            : choices.length > 0
+              ? "Choose display"
+              : !dismissed && deviceName
+                ? "Retry cast"
+                : "Cast"}
       </button>
+      {choices.length > 0 ? (
+        <div className="flex max-w-72 flex-col gap-1">
+          {choices.map((device) => (
+            <button
+              key={device.name}
+              type="button"
+              onClick={() => {
+                serverSender.current = true;
+                setChoices([]);
+                setMessage(null);
+                setCastStatus("starting");
+                setDeviceName(device.name);
+              }}
+              className="rounded-xl border border-line px-3 py-2 text-right text-sm"
+            >
+              {device.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {message ? <p className="max-w-72 text-right text-xs text-danger">{message}</p> : null}
       {live ? (
         <p className="max-w-72 text-right text-xs text-muted">
